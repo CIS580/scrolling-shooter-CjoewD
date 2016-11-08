@@ -7,6 +7,14 @@ const Vector = require('./vector');
 const Camera = require('./camera');
 const Player = require('./player');
 const BulletPool = require('./bullet_pool');
+const FoeOne = require('./foeOne');
+const FoeTwo = require('./foeTwo');
+const FoeThree = require('./foeThree');
+const FoeFour = require('./foeFour');
+const FoeFive = require('./foeFive');
+const Part = require('./part');
+
+const BULLET_SPEED = 15;
 
 
 /* Global variables */
@@ -19,9 +27,49 @@ var input = {
   right: false
 }
 var camera = new Camera(canvas);
-var bullets = new BulletPool(10);
+//var bullets = new BulletPool(10);
+var bullets = [];
 var missiles = [];
+var foe = new FoeOne(camera.y);
+var foes = [];
+var upgrades = [];
+var part = [];
 var player = new Player(bullets, missiles);
+var backgrounds = [
+  new Image(),
+  new Image(),
+  new Image(),
+  new Image(),
+  new Image(),
+  new Image()
+];
+var loc = [
+  -214,
+  -1214,
+  -214,
+  -1214,
+  -214,
+  -1214
+];
+backgrounds[0].src = 'assets/closeStarsSmall.png';
+backgrounds[1].src = 'assets/closeStarsSmall.png';
+backgrounds[2].src = 'assets/cloudLayerSmall.png';
+backgrounds[3].src = 'assets/cloudLayerSmall.png';
+backgrounds[4].src = 'assets/backgroundSmall.png';
+backgrounds[5].src = 'assets/backgroundSmall.png';
+var lives = 3;
+var score = 0;
+var level = 1;
+var killable = 100;
+var state = "start";
+var kills = 0;
+var shoot = false;
+var canShoot = true;
+var gunState = "norm";
+var amount = 0;
+var smoke = 0;
+
+
 
 /**
  * @function onkeydown
@@ -49,6 +97,21 @@ window.onkeydown = function(event) {
       input.right = true;
       event.preventDefault();
       break;
+	case "v":
+      if(state == "run" && canShoot) {
+		  shoot = true;
+		  canShoot = false;
+		  }
+      event.preventDefault();
+      break;
+	case "b":
+		if(state == "win"){
+			lives = 1;
+			die();
+		}
+	  state = "run";
+	  event.preventDefault();
+	  break;
   }
 }
 
@@ -78,6 +141,9 @@ window.onkeyup = function(event) {
       input.right = false;
       event.preventDefault();
       break;
+	case "v":
+	  canShoot = true;
+	  break;
   }
 }
 
@@ -101,30 +167,188 @@ masterLoop(performance.now());
  * the number of milliseconds passed since the last frame.
  */
 function update(elapsedTime) {
+  if(state == "run"){
+	  // update the player
+	  player.update(elapsedTime, input, camera.y);
+	  
+	  //update the foe
+	  foe.update(elapsedTime, input, camera.y, player.getPosition());
+	  
+	  for(var i = 0; i < foes.length; i++){
+		  foes[i].update(elapsedTime, input, camera.y, player.getPosition());
+	  } 
 
-  // update the player
-  player.update(elapsedTime, input);
+	  // update the camera
+	  camera.update(player.position, player.getOffset());
 
-  // update the camera
-  camera.update(player.position);
+	  
+	  //makes the bullets if input was made
+	  switch(gunState){
+		  case "norm":
+			if(shoot) {
+				bullets.push({x: player.getPosition().x+10,  y: player.getPosition().y});
+			}
+			shoot = false;
+			break;
+		  case "fast":
+		    if(shoot) {
+				bullets.push({x: player.getPosition().x+10,  y: player.getPosition().y-15});
+				bullets.push({x: player.getPosition().x+10,  y: player.getPosition().y});
+				bullets.push({x: player.getPosition().x+10,  y: player.getPosition().y+15});
+			}
+			shoot = false;
+			break;
+		  case "double":
+		    if(shoot) {
+				bullets.push({x: player.getPosition().x-10,  y: player.getPosition().y});
+				bullets.push({x: player.getPosition().x+30,  y: player.getPosition().y});
+			}
+		    shoot = false;
+			break;
+		  case "large":
+		    if(shoot) {
+				bullets.push({x: player.getPosition().x+10,  y: player.getPosition().y});
+			}
+		    shoot = false;
+			break;
+	  }
+	  
+	  
+	  //updates the particles
+	  if(part.length>0&&part[0].isDead()) part.shift();
+	  for(var i = 0; i < part.length; i++){
+		  part[i].update(elapsedTime, input);
+	  } 
+	  
+	  
+	  
+	  /* // Update bullets
+	  bullets.update(elapsedTime, function(bullet){
+		if(!camera.onScreen(bullet)) return true;
+		return false;
+	  }); */
 
-  // Update bullets
-  bullets.update(elapsedTime, function(bullet){
-    if(!camera.onScreen(bullet)) return true;
-    return false;
-  });
+	  // Update missiles
+	  var markedForRemoval = [];
+	  missiles.forEach(function(missile, i){
+		missile.update(elapsedTime);
+		if(Math.abs(missile.position.x - camera.x) > camera.width * 2)
+		  markedForRemoval.unshift(i);
+	  });
+	  // Remove missiles that have gone off-screen
+	  markedForRemoval.forEach(function(index){
+		missiles.splice(index, 1);
+	  });
+	  
+	  //updates image location
+	  if(loc[0] > camera.y + 786){
+		  loc[0] -= 2000;
+	  }
+	  else if(loc[1] > camera.y + 786){
+		  loc[1] -= 2000;
+	  }
+	  if(loc[2] > camera.y*.6 + 786){
+		  loc[2] -= 2000;
+	  }
+	  else if(loc[3] > camera.y*.6 + 786){
+		  loc[3] -= 2000;
+	  }
+	  if(loc[4] > camera.y*.2 + 786){
+		  loc[4] -= 2000;
+	  }
+	  else if(loc[5] > camera.y*.2 + 786){
+		  loc[5] -= 2000;
+	  }
+	  
+	  //brief not killable (working?)
+	  if(killable < 100) killable++;
+	  
+	  //updates the bullets and makes the particle affects
+	  var temp = 0;
+	  for(var i = 0; i < bullets.length; i++){
+		  bullets[i].y -= BULLET_SPEED;
+		  switch(gunState){
+			  case "fast":
+			    temp++
+				if(temp == 3){
+					part.push(new Part({x: bullets[i].x,  y: bullets[i].y} ,1,0));
+					temp = 0;
+				}
+				break;
+			  case "double":
+			    smoke++;
+				if(smoke == 3){
+					part.push(new Part({x: bullets[i].x,  y: bullets[i].y} ,2,-1));
+					part.push(new Part({x: bullets[i].x,  y: bullets[i].y} ,2,1));
+					smoke = 0;
+				}
+				break;
+			  case "large":
+			    part.push(new Part({x: bullets[i].x,  y: bullets[i].y} ,3,0));
+				break;
+		  }
+	  }
+	  
+	  //removes offscreen bullets
+	  if(bullets.length > 0 && bullets[0].y < camera.y ) {
+		  bullets.shift();
+	  }
+	  
+	  //removes offscreen foes
+      var foePos;
+	  if(foes.length > 0) foePos = foes[0].getPosition();
+	  if(foes.length > 0 && foePos.y > camera.y+800 ) {
+		  foes.shift();
+	  }
+	  
+	  //removes off screen upgrades
+	  if(upgrades.length > 0 && upgrades[0].y > camera.y+800 ) {
+		  upgrades.shift();
+	  }
 
-  // Update missiles
-  var markedForRemoval = [];
-  missiles.forEach(function(missile, i){
-    missile.update(elapsedTime);
-    if(Math.abs(missile.position.x - camera.x) > camera.width * 2)
-      markedForRemoval.unshift(i);
-  });
-  // Remove missiles that have gone off-screen
-  markedForRemoval.forEach(function(index){
-    missiles.splice(index, 1);
-  });
+	  
+	  //checks collisions
+	  playerBulletCollisions();
+	  foeCollisions();
+	  foeBulletCollisions();
+	  playerUpgradeCollisions();
+	  
+	  
+	  /* if(getRandomNumber(0,50) <= 2){
+		  if(getRandomNumber(0,200) <= 10) foes.push(new FoeFive(camera.y));
+		  else foes.push(new FoeFour(camera.y));
+	  } */
+	  
+	  //generates the upgrades
+	  if(upgrades.length == 0){
+		  var temp = Math.floor(getRandomNumber(0,200));
+		  switch(temp){
+			  case 0:
+				//upgrades.push({x: getRandomNumber(10, 1030), y: camera.y-40, upgrade: 0});
+				break;
+			  case 1:
+				upgrades.push({x: getRandomNumber(10, 1030), y: camera.y-40, upgrade: 1});
+				break;
+			  case 2:
+				upgrades.push({x: getRandomNumber(10, 1030), y: camera.y-40, upgrade: 2});
+				break;
+			  case 3:
+				upgrades.push({x: getRandomNumber(10, 1030), y: camera.y-40, upgrade: 3});
+				break;
+		  }
+	  }
+	  
+	  //generate new generic foes
+	  if(getRandomNumber(0,50) <= 3){
+		  if(getRandomNumber(0,200) <= 10) foes.push(new FoeFive(camera.y));
+		  else foes.push(new FoeFour(camera.y));
+	  }
+	  
+  }
+}
+
+function getRandomNumber(min, max) {
+    return Math.random() * (max - min) + min;
 }
 
 /**
@@ -139,7 +363,7 @@ function render(elapsedTime, ctx) {
   ctx.fillRect(0, 0, 1024, 786);
 
   // TODO: Render background
-
+  renderBackgrounds(elapsedTime, ctx);
   // Transform the coordinate system using
   // the camera position BEFORE rendering
   // objects in the world - that way they
@@ -156,6 +380,47 @@ function render(elapsedTime, ctx) {
 }
 
 /**
+  * @function renderBackgrounds
+  * Renders the parallax scrolling backgrounds.
+  * @param {DOMHighResTimeStamp} elapsedTime
+  * @param {CanvasRenderingContext2D} ctx the context to render to
+  */
+function renderBackgrounds(elapsedTime, ctx) {
+  // The background scrolls at 2% of the foreground speed
+  ctx.save();
+  ctx.translate(0, -camera.y * 0.2);
+  ctx.drawImage(backgrounds[5], 0, loc[5]);
+  ctx.restore();
+
+  ctx.save();
+  ctx.translate(0, -camera.y * 0.2);
+  ctx.drawImage(backgrounds[4], 0, loc[4]);
+  ctx.restore();
+
+  // The midground scrolls at 60% of the foreground speed
+  ctx.save();
+  ctx.translate(0, -camera.y * 0.6);
+  ctx.drawImage(backgrounds[3], 0, loc[3]);
+  ctx.restore();
+  
+  ctx.save();
+  ctx.translate(0, -camera.y * 0.6);
+  ctx.drawImage(backgrounds[2], 0, loc[2]);
+  ctx.restore();
+
+  // The foreground scrolls in sync with the camera
+  ctx.save();
+  ctx.translate(0, -camera.y);
+  ctx.drawImage(backgrounds[1], 0, loc[1]);
+  ctx.restore();
+
+  ctx.save();
+  ctx.translate(0, -camera.y);
+  ctx.drawImage(backgrounds[0], 0, loc[0]);
+  ctx.restore();
+}
+
+/**
   * @function renderWorld
   * Renders the entities in the game world
   * IN WORLD COORDINATES
@@ -163,16 +428,99 @@ function render(elapsedTime, ctx) {
   * @param {CanvasRenderingContext2D} ctx the context to render to
   */
 function renderWorld(elapsedTime, ctx) {
-    // Render the bullets
-    bullets.render(elapsedTime, ctx);
+    /* // Render the bullets
+    bullets.render(elapsedTime, ctx); */
 
     // Render the missiles
     missiles.forEach(function(missile) {
       missile.render(elapsedTime, ctx);
     });
+	
+	//render particles
+	for(var i = 0; i < part.length; i++){
+		  part[i].render(elapsedTime, ctx);
+	} 
 
     // Render the player
     player.render(elapsedTime, ctx);
+	var pos = player.getPosition();
+	ctx.beginPath();
+	ctx.lineWidth = 3;
+	ctx.strokeStyle = 'white';
+	switch(gunState){
+		case "fast":
+		  ctx.fillStyle = 'red';
+		  break;
+		case "double":
+		  ctx.fillStyle = 'blue';
+		  break;
+		case "large":
+		  ctx.fillStyle = 'green';
+		  break;
+	}
+	ctx.arc(pos.x+10, pos.y+20, 10, 0, 2 * Math.PI, false); //(x,y,radius, for circle = 0, for circle = 2* MAth.PI)
+	ctx.stroke();
+    ctx.fill();
+	
+	//render the foe
+	foe.render(elapsedTime, ctx);
+	
+	
+	//render the bullets
+	ctx.beginPath();
+	  for (var i = 0; i < bullets.length; i++) {
+		  ctx.beginPath();
+		  switch(gunState){
+			  case "norm":
+				ctx.fillStyle = 'green';
+				ctx.arc(bullets[i].x, bullets[i].y, 4, 0, 2 * Math.PI, false); //(x,y,radius, for circle = 0, for circle = 2* MAth.PI)
+				break;
+			  case "fast":
+				ctx.fillStyle = 'orange';
+				ctx.arc(bullets[i].x, bullets[i].y, 4, 0, 2 * Math.PI, false); //(x,y,radius, for circle = 0, for circle = 2* MAth.PI)
+				break;
+			  case "double":
+				ctx.fillStyle = 'yellow';
+				ctx.arc(bullets[i].x, bullets[i].y, 4, 0, 2 * Math.PI, false); //(x,y,radius, for circle = 0, for circle = 2* MAth.PI)
+				break;
+			  case "large":
+				ctx.fillStyle = 'white';
+				ctx.arc(bullets[i].x, bullets[i].y, 12, 0, 2 * Math.PI, false); //(x,y,radius, for circle = 0, for circle = 2* MAth.PI)
+				break;
+		  }
+		  ctx.fill();
+	  }
+	  
+	  for (var i = 0; i < upgrades.length; i++) {
+		  ctx.beginPath();
+		  ctx.lineWidth = 10;
+		  ctx.strokeStyle = 'white';
+		  switch(upgrades[0].upgrade){
+			  case 1:
+			    ctx.fillStyle = 'red';
+				break;
+			  case 2:
+			    ctx.fillStyle = 'blue';
+				break;
+			  case 3:
+			    ctx.fillStyle = 'green';
+				break;
+		  }
+		  ctx.arc(upgrades[0].x, upgrades[0].y, 20, 0, 2 * Math.PI, false); //(x,y,radius, for circle = 0, for circle = 2* MAth.PI)
+		  ctx.stroke();
+          ctx.fill();
+	  }
+	  
+	  
+	  /* for (var i = 0; i < bullets.length; i++) {
+		  ctx.beginPath();
+		  ctx.arc(bullets[i].x, bullets[i].y, 4, 0, 2 * Math.PI, false); //(x,y,radius, for circle = 0, for circle = 2* MAth.PI)
+		  ctx.fill();
+	  } */
+	  
+	  for (var i = 0; i < foes.length; i++) {
+		  foes[i].render(elapsedTime,ctx);
+	  }
 }
 
 /**
@@ -183,9 +531,191 @@ function renderWorld(elapsedTime, ctx) {
   */
 function renderGUI(elapsedTime, ctx) {
   // TODO: Render the GUI
+  //draw ui text
+  ctx.fillStyle = "white";
+  ctx.font = "20px Arial";
+  if(level < 4) ctx.fillText("Level: " + level, 915, 775);
+  else ctx.fillText("Level: won!", 915, 775);
+  ctx.fillText("Score: " + score, 460, 775)
+  ctx.fillText("Lives: ", 15, 775);
+  //draw lives
+  ctx.strokeStyle = 'white';
+  for(var i = 0; i< lives;i++){
+	  ctx.beginPath();
+	  ctx.moveTo(85+(i*25), 755);
+	  ctx.lineTo(75+(i*25), 775);
+	  ctx.lineTo(85+(i*25), 765);
+	  ctx.lineTo(95+(i*25), 775);
+	  ctx.closePath();
+	  ctx.stroke();
+  }  
+  
+  switch(state){
+	  case "start":
+	  case "mid":
+			ctx.fillStyle = "white";
+			ctx.font = "bold 100px Arial";
+			ctx.fillText("LEVEL " + level, 300, 200);
+			ctx.font = "bold 50px Arial";
+			if(kills > 0) ctx.fillText("Kills: " + kills, 400, 300);
+		break;
+	  case "win":
+			ctx.fillStyle = "white";
+			ctx.font = "bold 100px Arial";
+			ctx.fillText("YOU WON!!!", 200, 200);
+			ctx.font = "bold 50px Arial";
+			if(kills > 0) ctx.fillText("Kills: " + kills, 400, 300);
+		break;
+  }
+  
+ 
 }
 
-},{"./bullet_pool":2,"./camera":3,"./game":4,"./player":6,"./vector":8}],2:[function(require,module,exports){
+//checks if player hits foe
+function foeCollisions(){
+	var playerPos = player.getPosition();
+	for(var i = 0; i < foes.length; i++){
+		var foePos = foes[i].getPosition();
+		if(!foes[i].getKill() && foePos.x > playerPos.x-40 && foePos.x < playerPos.x+30){
+			if(foePos.y > playerPos.y -40 && foePos.y < playerPos.y+46){
+				foes[i].kill();
+				part.push(new Part({x: foePos.x+15,  y: foePos.y} ,4,0));
+				die();
+				part.push(new Part({x: playerPos.x+10,  y: playerPos.y} ,5,0));
+			}
+		}
+	}
+}
+
+//checks if player gets powerup
+function playerUpgradeCollisions(){
+	var playerPos = player.getPosition();
+	for(var i = 0; i < upgrades.length; i++){
+		var upX = upgrades[i].x;
+		var upY = upgrades[i].y;
+		if(upX > playerPos.x-40 && upX < playerPos.x+60){
+			if(upY > playerPos.y -40 && upY < playerPos.y+46){
+				switch(upgrades[i].upgrade){
+					case 0:
+					case 1:
+						gunState = "fast";
+						break;
+					case 2:
+						gunState = "double";
+						break;
+					case 3:
+						gunState = "large";
+						break;
+				}
+				upgrades.shift();
+				bullets = [];
+			}
+		}
+	}
+}
+
+//checks if foe bullets hit the player
+function foeBulletCollisions(){
+	var bullets = foe.getBullets();
+	var playerPos = player.getPosition();
+	for(var i = 0; i<bullets.length;i++){
+		if(bullets[i].x > playerPos.x-3 && bullets[i].x < playerPos.x+54){
+			if(bullets[i].y > playerPos.y -3 && bullets[i].y < playerPos.y+46){
+				foe.killBullet(i);
+				part.push(new Part({x: playerPos.x+10,  y: playerPos.y} ,5,0));
+				die();
+				break;
+			}
+		}
+	}
+}
+
+//checks if player bullets foes
+function playerBulletCollisions(){
+	var playerPos = foe.getPosition();
+	for(var i = 0; i<bullets.length;i++){
+		if(!foe.getKill() && bullets[i].x > playerPos.x-3 && bullets[i].x < playerPos.x+40){
+			if(bullets[i].y > playerPos.y -3 && bullets[i].y < playerPos.y+40){
+				foe.kill();
+				part.push(new Part({x: playerPos.x+15,  y: playerPos.y} ,4,0));
+				kills++;
+				score += 1000;
+				nextLevel();
+				break;
+			}
+		}
+	}
+	for(var i = 0; i<foes.length;i++){
+		var playerPos = foes[i].getPosition();
+		for(var j = 0; j<bullets.length;j++){
+			if(!foes[i].getKill() && bullets[j].x > playerPos.x-3 && bullets[j].x < playerPos.x+40){
+				if(bullets[j].y > playerPos.y -3 && bullets[j].y < playerPos.y+40){
+					foes[i].kill();
+					part.push(new Part({x: playerPos.x+15,  y: playerPos.y} ,4,0));
+					kills++;
+					score += 100;
+				}
+			}
+		}
+	}
+}
+
+//player has died
+function die(){
+	lives--;
+	gunState = "norm"
+	if(lives < 1){
+		lives = 3;
+		score = 0;
+		level = 1;
+		loc = [
+		  -214,
+		  -1214,
+		  -214,
+		  -1214,
+		  -214,
+		  -1214
+		];
+		game = new Game(canvas, update, render);
+		input = {
+		  up: false,
+		  down: false,
+		  left: false,
+		  right: false
+		}
+		camera = new Camera(canvas);
+		bullets = new BulletPool(10);
+		missiles = [];
+		foe = new FoeOne(camera.y);
+		foes = [];
+		player = new Player(bullets, missiles);
+		bullets = [];
+		kills = 0;
+		state = "start"
+		upgrades = [];
+		part = [];
+	}
+	else{
+		killable = 0;
+		
+	}
+}
+
+//resets map for next level
+function nextLevel(){
+	level++;
+	state = "mid";
+	bullets = [];
+	foes = [];
+	part = [];
+	upgrades = [];
+	if(level == 2) foe = new FoeTwo(camera.y);
+	if(level == 3) foe = new FoeThree(camera.y);
+	if(level == 4) state = "win";
+}
+
+
+},{"./bullet_pool":2,"./camera":3,"./foeFive":4,"./foeFour":5,"./foeOne":6,"./foeThree":7,"./foeTwo":8,"./game":9,"./part":11,"./player":12,"./vector":13}],2:[function(require,module,exports){
 "use strict";
 
 /**
@@ -313,8 +843,9 @@ function Camera(screen) {
  * Updates the camera based on the supplied target
  * @param {Vector} target what the camera is looking at
  */
-Camera.prototype.update = function(target) {
+Camera.prototype.update = function(target, offset) {
   // TODO: Align camera with player
+  this.y = target.y - offset;
 }
 
 /**
@@ -352,7 +883,638 @@ Camera.prototype.toWorldCoordinates = function(screenCoordinates) {
   return Vector.add(screenCoordinates, this);
 }
 
-},{"./vector":8}],4:[function(require,module,exports){
+},{"./vector":13}],4:[function(require,module,exports){
+"use strict";
+
+/* Constants */
+const PLAYER_SPEED = 5;
+const BULLET_SPEED = 10;
+
+/**
+ * @module Player
+ * A class representing a player's helicopter
+ */
+module.exports = exports = FoeFive;
+
+/**
+ * @constructor Player
+ * Creates a player
+ * @param {BulletPool} bullets the bullet pool
+ */
+function FoeFive(loc) {
+  this.bullets = [];
+  this.position = {x: 500, y: loc-40};
+  this.velocity = {x: 0, y: 0};
+  this.offset = 500;
+  this.img = new Image()
+  this.img.src = 'assets/foe5.png';
+  this.gone = false;
+  this.yVal =0;
+  this.click = 0;
+  this.dead = false;
+}
+
+/**
+ * @function update
+ * Updates the player based on the supplied input
+ * @param {DOMHighResTimeStamp} elapedTime
+ * @param {Input} input object defining input, must have
+ * boolean properties: up, left, right, down
+ */
+FoeFive.prototype.update = function(elapsedTime, input, camera, player) {
+
+	this.position.x = player.x-9;
+
+}
+
+/**
+ * @function render
+ * Renders the player helicopter in world coordinates
+ * @param {DOMHighResTimeStamp} elapsedTime
+ * @param {CanvasRenderingContext2D} ctx
+ */
+FoeFive.prototype.render = function(elapasedTime, ctx) {
+  if(!this.dead){
+	  ctx.save();
+	  ctx.translate(this.position.x, this.position.y);
+	  ctx.drawImage(this.img, 0, 0, 40, 40);  
+	  ctx.restore();
+
+  }
+}
+
+FoeFive.prototype.getBullets = function() {
+  return this.bullets;
+}
+
+FoeFive.prototype.getPosition = function(){
+	return this.position;
+}
+
+FoeFive.prototype.killBullet = function(value){
+	switch(value){
+		case 0:
+			this.bullets.shift();
+			break;
+		case 1:
+			var temp = this.bullets.shift();
+			this.bullets.shift();
+			this.bullets.unshift(temp);
+			break;
+		case 2:
+			var temp = this.bullets.shift();
+			var temp1 = this.bullets.shift();
+			this.bullets.shift();
+			this.bullets.unshift(temp1);
+			this.bullets.unshift(temp);		
+			break;
+	}
+}
+
+FoeFive.prototype.kill = function(){
+	this.dead = true;
+}
+
+FoeFive.prototype.getKill = function(){
+	return this.dead;
+}
+
+function getRandomNumber(min, max) {
+    return Math.random() * (max - min) + min;
+}
+},{}],5:[function(require,module,exports){
+"use strict";
+
+/* Constants */
+const PLAYER_SPEED = 5;
+const BULLET_SPEED = 10;
+
+/**
+ * @module Player
+ * A class representing a player's helicopter
+ */
+module.exports = exports = FoeFour;
+
+/**
+ * @constructor Player
+ * Creates a player
+ * @param {BulletPool} bullets the bullet pool
+ */
+function FoeFour(loc) {
+  this.bullets = [];
+  this.position = {x: getRandomNumber(10, 1030), y: loc-40};
+  this.velocity = {x: 0, y: 0};
+  this.offset = 500;
+  this.img = new Image()
+  this.img.src = 'assets/foe3.png';
+  this.gone = false;
+  this.yVal =0;
+  this.click = 0;
+  this.dead = false;
+}
+
+/**
+ * @function update
+ * Updates the player based on the supplied input
+ * @param {DOMHighResTimeStamp} elapedTime
+ * @param {Input} input object defining input, must have
+ * boolean properties: up, left, right, down
+ */
+FoeFour.prototype.update = function(elapsedTime, input, camera, player) {
+
+ 
+  
+
+}
+
+/**
+ * @function render
+ * Renders the player helicopter in world coordinates
+ * @param {DOMHighResTimeStamp} elapsedTime
+ * @param {CanvasRenderingContext2D} ctx
+ */
+FoeFour.prototype.render = function(elapasedTime, ctx) {
+  if(!this.dead){
+	  ctx.save();
+	  ctx.translate(this.position.x, this.position.y);
+	  ctx.drawImage(this.img, 0, 0, 40, 40);  
+	  ctx.restore();
+
+  }
+}
+
+FoeFour.prototype.getBullets = function() {
+  return this.bullets;
+}
+
+FoeFour.prototype.getPosition = function(){
+	return this.position;
+}
+
+FoeFour.prototype.killBullet = function(value){
+	switch(value){
+		case 0:
+			this.bullets.shift();
+			break;
+		case 1:
+			var temp = this.bullets.shift();
+			this.bullets.shift();
+			this.bullets.unshift(temp);
+			break;
+		case 2:
+			var temp = this.bullets.shift();
+			var temp1 = this.bullets.shift();
+			this.bullets.shift();
+			this.bullets.unshift(temp1);
+			this.bullets.unshift(temp);		
+			break;
+	}
+}
+
+FoeFour.prototype.kill = function(){
+	this.dead = true;
+}
+
+FoeFour.prototype.getKill = function(){
+	return this.dead;
+}
+
+function getRandomNumber(min, max) {
+    return Math.random() * (max - min) + min;
+}
+},{}],6:[function(require,module,exports){
+"use strict";
+
+/* Constants */
+const PLAYER_SPEED = 5;
+const BULLET_SPEED = 10;
+
+/**
+ * @module Player
+ * A class representing a player's helicopter
+ */
+module.exports = exports = FoeOne;
+
+/**
+ * @constructor Player
+ * Creates a player
+ * @param {BulletPool} bullets the bullet pool
+ */
+function FoeOne(loc) {
+  this.bullets = [];
+  this.position = {x: getRandomNumber(200, 880), y: loc-40};
+  this.velocity = {x: 0, y: 0};
+  this.offset = 500;
+  this.img = new Image()
+  this.img.src = 'assets/foe1.png';
+  this.gone = false;
+  this.yVal =0;
+  this.click = 0;
+  this.dead = false;
+}
+
+/**
+ * @function update
+ * Updates the player based on the supplied input
+ * @param {DOMHighResTimeStamp} elapedTime
+ * @param {Input} input object defining input, must have
+ * boolean properties: up, left, right, down
+ */
+FoeOne.prototype.update = function(elapsedTime, input, camera) {
+
+  // set the offset
+  if(input.up && camera < this.position.y - 200) {
+	  this.offset -= PLAYER_SPEED / 2;
+  }
+  if(input.down && camera > this.position.y - 700) {
+	  this.offset += PLAYER_SPEED / 2;
+  }
+
+  // move the player
+  if (this.yVal < 80) {
+	  this.position.y += PLAYER_SPEED /2;
+	  this.yVal += PLAYER_SPEED /2;
+  }
+
+  // don't let the player move off-screen
+  if(this.position.x < 10) this.position.x = 10;
+  if(this.position.x > 994) this.position.x = 994;
+  if(this.position.y > 786) this.gone = true;
+  
+  //forces a constant move forward
+  this.position.y -= 5;
+  
+  //make bullets
+  this.click++;
+  if (this.click == 50) {
+        this.click = 1;
+        
+        //Spawns Apple
+        this.bullets.push({x: this.position.x +20 , y: this.position.y+20 });
+  }
+  for(var i = 0; i < this.bullets.length; i++){
+	  this.bullets[i].y+= BULLET_SPEED;
+  }
+  if(this.bullets.length > 0 && this.bullets[0].y > camera + 790) this.bullets.shift();
+}
+
+/**
+ * @function render
+ * Renders the player helicopter in world coordinates
+ * @param {DOMHighResTimeStamp} elapsedTime
+ * @param {CanvasRenderingContext2D} ctx
+ */
+FoeOne.prototype.render = function(elapasedTime, ctx) {
+  if(!this.dead){
+	  ctx.save();
+	  ctx.translate(this.position.x, this.position.y);
+	  ctx.drawImage(this.img, 0, 0, 40, 40);  
+	  ctx.restore();
+	  
+	  
+	  ctx.beginPath();
+	  ctx.fillStyle = 'red';
+	  for (var i = 0; i < this.bullets.length; i++) {
+		  ctx.beginPath();
+		  ctx.arc(this.bullets[i].x, this.bullets[i].y, 4, 0, 2 * Math.PI, false); //(x,y,radius, for circle = 0, for circle = 2* MAth.PI)
+		  ctx.fill();
+	  }
+  }
+}
+
+FoeOne.prototype.getBullets = function() {
+  return this.bullets;
+}
+
+FoeOne.prototype.getPosition = function(){
+	return this.position;
+}
+
+FoeOne.prototype.killBullet = function(value){
+	switch(value){
+		case 0:
+			this.bullets.shift();
+			break;
+		case 1:
+			var temp = this.bullets.shift();
+			this.bullets.shift();
+			this.bullets.unshift(temp);
+			break;
+		case 2:
+			var temp = this.bullets.shift();
+			var temp1 = this.bullets.shift();
+			this.bullets.shift();
+			this.bullets.unshift(temp1);
+			this.bullets.unshift(temp);		
+			break;
+	}
+}
+
+FoeOne.prototype.kill = function(){
+	this.dead = true;
+}
+
+FoeOne.prototype.getKill = function(){
+	return this.dead;
+}
+
+function getRandomNumber(min, max) {
+    return Math.random() * (max - min) + min;
+}
+},{}],7:[function(require,module,exports){
+"use strict";
+
+/* Constants */
+const PLAYER_SPEED = 5;
+const BULLET_SPEED = 10;
+
+/**
+ * @module Player
+ * A class representing a player's helicopter
+ */
+module.exports = exports = FoeThree;
+
+/**
+ * @constructor Player
+ * Creates a player
+ * @param {BulletPool} bullets the bullet pool
+ */
+function FoeThree(loc) {
+  this.bullets = [];
+  this.position = {x: 494, y: loc-40};
+  this.velocity = {x: 0, y: 0};
+  this.offset = 500;
+  this.img = new Image()
+  this.img.src = 'assets/foe4.png';
+  this.gone = false;
+  this.yVal =0;
+  this.click = 0;
+  this.dead = false;
+}
+
+/**
+ * @function update
+ * Updates the player based on the supplied input
+ * @param {DOMHighResTimeStamp} elapedTime
+ * @param {Input} input object defining input, must have
+ * boolean properties: up, left, right, down
+ */
+FoeThree.prototype.update = function(elapsedTime, input, camera, player) {
+
+  // set the offset
+  if(input.up && camera < this.position.y - 200) {
+	  this.offset -= PLAYER_SPEED / 2;
+  }
+  if(input.down && camera > this.position.y - 700) {
+	  this.offset += PLAYER_SPEED / 2;
+  }
+
+  // move the player
+  if (this.yVal < 80) {
+	  this.position.y += PLAYER_SPEED /2;
+	  this.yVal += PLAYER_SPEED /2;
+  }
+
+  console.log(player.x);
+  this.position.x = player.x;
+  
+  // don't let the player move off-screen
+  if(this.position.x < 10) this.position.x = 10;
+  if(this.position.x > 994) this.position.x = 994;
+  if(this.position.y > 786) this.gone = true;
+  
+  //forces a constant move forward
+  this.position.y -= 5;
+  
+  
+  //make bullets
+  this.click++;
+  if (this.click == 30) {
+        this.click = 1;
+        
+        //Spawns Apple
+        this.bullets.push({x: this.position.x +20 , y: this.position.y+20 });
+  }
+  for(var i = 0; i < this.bullets.length; i++){
+	  this.bullets[i].y+= BULLET_SPEED;
+  }
+  if(this.bullets.length > 0 && this.bullets[0].y > camera + 790) this.bullets.shift();
+}
+
+/**
+ * @function render
+ * Renders the player helicopter in world coordinates
+ * @param {DOMHighResTimeStamp} elapsedTime
+ * @param {CanvasRenderingContext2D} ctx
+ */
+FoeThree.prototype.render = function(elapasedTime, ctx) {
+  if(!this.dead){
+	  ctx.save();
+	  ctx.translate(this.position.x, this.position.y);
+	  ctx.drawImage(this.img, 0, 0, 40, 40);  
+	  ctx.restore();
+	  
+	  
+	  ctx.beginPath();
+	  ctx.fillStyle = 'red';
+	  for (var i = 0; i < this.bullets.length; i++) {
+		  ctx.beginPath();
+		  ctx.arc(this.bullets[i].x, this.bullets[i].y, 4, 0, 2 * Math.PI, false); //(x,y,radius, for circle = 0, for circle = 2* MAth.PI)
+		  ctx.fill();
+	  }
+  }
+}
+
+FoeThree.prototype.getBullets = function() {
+  return this.bullets;
+}
+
+FoeThree.prototype.getPosition = function(){
+	return this.position;
+}
+
+FoeThree.prototype.killBullet = function(value){
+	switch(value){
+		case 0:
+			this.bullets.shift();
+			break;
+		case 1:
+			var temp = this.bullets.shift();
+			this.bullets.shift();
+			this.bullets.unshift(temp);
+			break;
+		case 2:
+			var temp = this.bullets.shift();
+			var temp1 = this.bullets.shift();
+			this.bullets.shift();
+			this.bullets.unshift(temp1);
+			this.bullets.unshift(temp);		
+			break;
+	}
+}
+
+FoeThree.prototype.kill = function(){
+	this.dead = true;
+}
+
+FoeThree.prototype.getKill = function(){
+	return this.dead;
+}
+
+function getRandomNumber(min, max) {
+    return Math.random() * (max - min) + min;
+}
+},{}],8:[function(require,module,exports){
+"use strict";
+
+/* Constants */
+const PLAYER_SPEED = 5;
+const BULLET_SPEED = 10;
+
+/**
+ * @module Player
+ * A class representing a player's helicopter
+ */
+module.exports = exports = FoeTwo;
+
+/**
+ * @constructor Player
+ * Creates a player
+ * @param {BulletPool} bullets the bullet pool
+ */
+function FoeTwo(loc) {
+  this.bullets = [];
+  this.position = {x: 494, y: loc-40};
+  this.velocity = {x: 0, y: 0};
+  this.offset = 500;
+  this.img = new Image()
+  this.img.src = 'assets/foe2.png';
+  this.gone = false;
+  this.yVal =0;
+  this.click = 0;
+  this.dead = false;
+  this.xDir = 0;
+}
+
+/**
+ * @function update
+ * Updates the player based on the supplied input
+ * @param {DOMHighResTimeStamp} elapedTime
+ * @param {Input} input object defining input, must have
+ * boolean properties: up, left, right, down
+ */
+FoeTwo.prototype.update = function(elapsedTime, input, camera) {
+
+  // set the offset
+  if(input.up && camera < this.position.y - 200) {
+	  this.offset -= PLAYER_SPEED / 2;
+  }
+  if(input.down && camera > this.position.y - 700) {
+	  this.offset += PLAYER_SPEED / 2;
+  }
+
+  // move the player
+  if (this.yVal < 80) {
+	  this.position.y += PLAYER_SPEED /2;
+	  this.yVal += PLAYER_SPEED /2;
+  }
+
+  if(this.xDir == 0){
+	  this.position.x -= PLAYER_SPEED;
+	  if(getRandomNumber(0, 10) <= 1) this.xDir = 1;
+  }
+  else{
+	  this.position.x += PLAYER_SPEED;
+	  if(getRandomNumber(0, 10) <= 1) this.xDir = 0;
+  }
+  
+  // don't let the player move off-screen
+  if(this.position.x < 10) this.position.x = 10;
+  if(this.position.x > 994) this.position.x = 994;
+  if(this.position.y > 786) this.gone = true;
+  
+  //forces a constant move forward
+  this.position.y -= 5;
+  
+  
+  //make bullets
+  this.click++;
+  if (this.click == 70) {
+        this.click = 1;
+        
+        //Spawns Apple
+        this.bullets.push({x: this.position.x +20 , y: this.position.y+20 });
+  }
+  for(var i = 0; i < this.bullets.length; i++){
+	  this.bullets[i].y+= BULLET_SPEED;
+  }
+  if(this.bullets.length > 0 && this.bullets[0].y > camera + 790) this.bullets.shift();
+}
+
+/**
+ * @function render
+ * Renders the player helicopter in world coordinates
+ * @param {DOMHighResTimeStamp} elapsedTime
+ * @param {CanvasRenderingContext2D} ctx
+ */
+FoeTwo.prototype.render = function(elapasedTime, ctx) {
+  if(!this.dead){
+	  ctx.save();
+	  ctx.translate(this.position.x, this.position.y);
+	  ctx.drawImage(this.img, 0, 0, 40, 40);  
+	  ctx.restore();
+	  
+	  
+	  ctx.beginPath();
+	  ctx.fillStyle = 'red';
+	  for (var i = 0; i < this.bullets.length; i++) {
+		  ctx.beginPath();
+		  ctx.arc(this.bullets[i].x, this.bullets[i].y, 4, 0, 2 * Math.PI, false); //(x,y,radius, for circle = 0, for circle = 2* MAth.PI)
+		  ctx.fill();
+	  }
+  }
+}
+
+FoeTwo.prototype.getBullets = function() {
+  return this.bullets;
+}
+
+FoeTwo.prototype.getPosition = function(){
+	return this.position;
+}
+
+FoeTwo.prototype.killBullet = function(value){
+	switch(value){
+		case 0:
+			this.bullets.shift();
+			break;
+		case 1:
+			var temp = this.bullets.shift();
+			this.bullets.shift();
+			this.bullets.unshift(temp);
+			break;
+		case 2:
+			var temp = this.bullets.shift();
+			var temp1 = this.bullets.shift();
+			this.bullets.shift();
+			this.bullets.unshift(temp1);
+			this.bullets.unshift(temp);		
+			break;
+	}
+}
+
+FoeTwo.prototype.kill = function(){
+	this.dead = true;
+}
+
+FoeTwo.prototype.getKill = function(){
+	return this.dead;
+}
+
+function getRandomNumber(min, max) {
+    return Math.random() * (max - min) + min;
+}
+},{}],9:[function(require,module,exports){
 "use strict";
 
 /**
@@ -410,84 +1572,98 @@ Game.prototype.loop = function(newTime) {
   this.frontCtx.drawImage(this.backBuffer, 0, 0);
 }
 
-},{}],5:[function(require,module,exports){
+},{}],10:[function(require,module,exports){
+
+},{}],11:[function(require,module,exports){
 "use strict";
 
-/* Classes and Libraries */
-const Vector = require('./vector');
-const SmokeParticles = require('./smoke_particles');
-
 /* Constants */
-const MISSILE_SPEED = 8;
+const PLAYER_SPEED = 5;
+const BULLET_SPEED = 10;
 
 /**
- * @module Missile
- * A class representing a player's missile
+ * @module Player
+ * A class representing a player's helicopter
  */
-module.exports = exports = Missile;
+module.exports = exports = Part;
 
 /**
- * @constructor Missile
- * Creates a missile
- * @param {Vector} position the position of the missile
- * @param {Object} target the target of the missile
+ * @constructor Player
+ * Creates a player
+ * @param {BulletPool} bullets the bullet pool
  */
-function Missile(position, target) {
-  this.position = {x: position.x, y:position.y}
-  this.target = target;
-  this.angle = 0;
-  this.img = new Image()
-  this.img.src = 'assets/helicopter.png';
-  this.smokeParticles = new SmokeParticles(400);
+function Part(loc, part, vel) {
+  this.position = {x: loc.x, y: loc.y};
+  this.color = "#470000"
+  this.size = 2;
+  this.xVel = vel;
+  this.die = 0;
+  this.dead = false;
+  this.increase = 0;
+  this.span = 200;
+  switch(part){
+	  case 1:
+	    
+		break;
+	  case 2:
+	    this.color = "#001347";
+		this.increase = .2;
+		break;
+	  case 3:
+	    this.color = "#473800";
+	    this.size = 5
+		this.increase = .3;
+		break;
+	  case 4:
+		this.color = "#7F0000";
+		this.size = 20;
+		this.increase = .8;
+		this.span = 50
+		break;
+	  case 5:
+		this.color = "grey";
+		this.size = 20;
+		this.increase = .8;
+		this.span = 50
+		break;
+  }
+  
+  
 }
 
 /**
  * @function update
- * Updates the missile, steering it towards a locked
- * target or straight ahead
+ * Updates the player based on the supplied input
  * @param {DOMHighResTimeStamp} elapedTime
+ * @param {Input} input object defining input, must have
+ * boolean properties: up, left, right, down
  */
-Missile.prototype.update = function(elapsedTime) {
-
-  // set the velocity
-  var velocity = {x: MISSILE_SPEED, y: 0}
-  if(this.target) {
-    var direction = Vector.subtract(this.position, this.target);
-    velocity = Vector.scale(Vector.normalize(direction), MISSILE_SPEED);
-  }
-
-  // determine missile angle
-  this.angle = Math.atan2(velocity.y, velocity.x);
-
-  // move the missile
-  this.position.x += velocity.x;
-  this.position.y += velocity.y;
-
-  // emit smoke
-  this.smokeParticles.emit(this.position);
-
-  // update smoke
-  this.smokeParticles.update(elapsedTime);
+Part.prototype.update = function(elapsedTime, input) {
+	this.position.x += this.xVel;
+	this.size += this.increase;
+	this.die++;
+	if(this.die > this.span) this.dead = true;
 }
 
 /**
  * @function render
- * Renders the missile in world coordinates
+ * Renders the player helicopter in world coordinates
  * @param {DOMHighResTimeStamp} elapsedTime
  * @param {CanvasRenderingContext2D} ctx
  */
-Missile.prototype.render = function(elapsedTime, ctx) {
-  // Draw Missile
-  ctx.save();
-  ctx.translate(this.position.x, this.position.y);
-  ctx.rotate(this.angle);
-  ctx.drawImage(this.img, 76, 56, 16, 8, 0, -4, 16, 8);
-  ctx.restore();
-  // Draw Smoke
-  this.smokeParticles.render(elapsedTime, ctx);
+Part.prototype.render = function(elapasedTime, ctx) {
+  if(!this.dead){
+	  ctx.beginPath();
+	  ctx.fillStyle = this.color;
+	  ctx.arc(this.position.x, this.position.y, this.size, 0, 2 * Math.PI, false); //(x,y,radius, for circle = 0, for circle = 2* MAth.PI)
+	  ctx.fill();
+  }
 }
 
-},{"./smoke_particles":7,"./vector":8}],6:[function(require,module,exports){
+Part.prototype.isDead = function() {
+  return this.dead;
+}
+},{}],12:[function(require,module,exports){
 "use strict";
 
 /* Classes and Libraries */
@@ -514,8 +1690,9 @@ function Player(bullets, missiles) {
   this.missileCount = 4;
   this.bullets = bullets;
   this.angle = 0;
-  this.position = {x: 200, y: 200};
+  this.position = {x: 514, y: 500};
   this.velocity = {x: 0, y: 0};
+  this.offset = 500;
   this.img = new Image()
   this.img.src = 'assets/tyrian.shp.007D3C.png';
 }
@@ -527,15 +1704,21 @@ function Player(bullets, missiles) {
  * @param {Input} input object defining input, must have
  * boolean properties: up, left, right, down
  */
-Player.prototype.update = function(elapsedTime, input) {
+Player.prototype.update = function(elapsedTime, input, camera) {
 
   // set the velocity
   this.velocity.x = 0;
   if(input.left) this.velocity.x -= PLAYER_SPEED;
   if(input.right) this.velocity.x += PLAYER_SPEED;
   this.velocity.y = 0;
-  if(input.up) this.velocity.y -= PLAYER_SPEED / 2;
-  if(input.down) this.velocity.y += PLAYER_SPEED / 2;
+  if(input.up && camera < this.position.y - 200) {
+      this.velocity.y -= PLAYER_SPEED / 2;
+	  this.offset -= PLAYER_SPEED / 2;
+  }
+  if(input.down && camera > this.position.y - 700) {
+	  this.velocity.y += PLAYER_SPEED / 2;
+	  this.offset += PLAYER_SPEED / 2;
+  }
 
   // determine player angle
   this.angle = 0;
@@ -547,9 +1730,12 @@ Player.prototype.update = function(elapsedTime, input) {
   this.position.y += this.velocity.y;
 
   // don't let the player move off-screen
-  if(this.position.x < 0) this.position.x = 0;
-  if(this.position.x > 1024) this.position.x = 1024;
+  if(this.position.x < 10) this.position.x = 10;
+  if(this.position.x > 994) this.position.x = 994;
   if(this.position.y > 786) this.position.y = 786;
+  
+  //forces a constant move forward
+  this.position.y -= 5;
 }
 
 /**
@@ -562,7 +1748,7 @@ Player.prototype.render = function(elapasedTime, ctx) {
   var offset = this.angle * 23;
   ctx.save();
   ctx.translate(this.position.x, this.position.y);
-  ctx.drawImage(this.img, 48+offset, 57, 23, 27, -12.5, -12, 23, 27);
+  ctx.drawImage(this.img, 48+offset, 57, 23, 27, -12.5, -12, 46, 54);
   ctx.restore();
 }
 
@@ -591,113 +1777,14 @@ Player.prototype.fireMissile = function() {
   }
 }
 
-},{"./missile":5,"./vector":8}],7:[function(require,module,exports){
-"use strict";
-
-/**
- * @module SmokeParticles
- * A class for managing a particle engine that
- * emulates a smoke trail
- */
-module.exports = exports = SmokeParticles;
-
-/**
- * @constructor SmokeParticles
- * Creates a SmokeParticles engine of the specified size
- * @param {uint} size the maximum number of particles to exist concurrently
- */
-function SmokeParticles(maxSize) {
-  this.pool = new Float32Array(3 * maxSize);
-  this.start = 0;
-  this.end = 0;
-  this.wrapped = false;
-  this.max = maxSize;
+Player.prototype.getOffset = function(){
+	return this.offset;
 }
 
-/**
- * @function emit
- * Adds a new particle at the given position
- * @param {Vector} position
-*/
-SmokeParticles.prototype.emit = function(position) {
-  if(this.end != this.max) {
-    this.pool[3*this.end] = position.x;
-    this.pool[3*this.end+1] = position.y;
-    this.pool[3*this.end+2] = 0.0;
-    this.end++;
-  } else {
-    this.pool[3] = position.x;
-    this.pool[4] = position.y;
-    this.pool[5] = 0.0;
-    this.end = 1;
-  }
+Player.prototype.getPosition = function(){
+	return this.position;
 }
-
-/**
- * @function update
- * Updates the particles
- * @param {DOMHighResTimeStamp} elapsedTime
- */
-SmokeParticles.prototype.update = function(elapsedTime) {
-  function updateParticle(i) {
-    this.pool[3*i+2] += elapsedTime;
-    if(this.pool[3*i+2] > 2000) this.start = i;
-  }
-  var i;
-  if(this.wrapped) {
-    for(i = 0; i < this.end; i++){
-      updateParticle.call(this, i);
-    }
-    for(i = this.start; i < this.max; i++){
-      updateParticle.call(this, i);
-    }
-  } else {
-    for(i = this.start; i < this.end; i++) {
-      updateParticle.call(this, i);
-    }
-  }
-}
-
-/**
- * @function render
- * Renders all bullets in our array.
- * @param {DOMHighResTimeStamp} elapsedTime
- * @param {CanvasRenderingContext2D} ctx
- */
-SmokeParticles.prototype.render = function(elapsedTime, ctx) {
-  function renderParticle(i){
-    var alpha = 1 - (this.pool[3*i+2] / 1000);
-    var radius = 0.1 * this.pool[3*i+2];
-    if(radius > 5) radius = 5;
-    ctx.beginPath();
-    ctx.arc(
-      this.pool[3*i],   // X position
-      this.pool[3*i+1], // y position
-      radius, // radius
-      0,
-      2*Math.PI
-    );
-    ctx.fillStyle = 'rgba(160, 160, 160,' + alpha + ')';
-    ctx.fill();
-  }
-
-  // Render the particles individually
-  var i;
-  if(this.wrapped) {
-    for(i = 0; i < this.end; i++){
-      renderParticle.call(this, i);
-    }
-    for(i = this.start; i < this.max; i++){
-      renderParticle.call(this, i);
-    }
-  } else {
-    for(i = this.start; i < this.end; i++) {
-      renderParticle.call(this, i);
-    }
-  }
-}
-
-},{}],8:[function(require,module,exports){
+},{"./missile":10,"./vector":13}],13:[function(require,module,exports){
 "use strict";
 
 /**
